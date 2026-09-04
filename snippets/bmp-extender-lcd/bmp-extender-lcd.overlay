@@ -1,0 +1,121 @@
+/*
+ * Sharp MIP 液晶 (LS011B7DH03, 160x68) 表示スニペット
+ *
+ * BMP Boost Extender Mini の FFC (ミニトラックパッドが刺さっていたポート) に
+ * ffc2mip-adapter v1 経由で beekeeb ブレイクアウトを接続する 2.4V 直結検証用。
+ *
+ * Extender Mini FFC → BMP Boost 追加IO の対応 (ngsyst/bmp_boost_extender_mini
+ * README のデバイスツリー例と基板データで確認):
+ *   FFC 2=SCLK→P0.17 / 3=SDIO→P0.21 / 4=MOTION→P0.29(未使用) /
+ *   5=CS→P0.31 / 6=VCC→P0.24 (GPIO 給電。液晶は数十µA なので GPIO 直で足りる)
+ *
+ * TWIM1/SPIM1 ペリフェラルを表示専用に使用する。
+ * トラックボール (spi0, 基板直結側) とは独立なので input-trackball はそのまま使える。
+ *
+ * 2026-08-05 実機フィードバック: ホスト (iPhone) 不在中にパネルメモリの
+ * ビットが化ける不具合が確認された (詳細は tecla-cero キーボードリポジトリ
+ * (zmk-keyboard-tecla-cero-adv-private) の snippets/display-mip/DESIGN.md
+ * 「パネルメモリ化け」節参照。同ファイルはこのモジュールには同梱していない)。
+ * 原因候補の一つである「試作機のジャンパ配線
+ * への 2.4GHz EMI 誘導」への緩和策として、SCLK/MOSI (pinctrl の
+ * nordic,drive-mode) と CS (cs-gpios) のドライブ強度を高駆動
+ * (NRF_DRIVE_H0H1 / NRF_GPIO_DRIVE_H0H1) に上げた。VCC (P0.24) は元々
+ * H1 (NRF_GPIO_DRIVE_H1) だったので揃える形。ファームで発生源そのものを
+ * 消すことはできないが、ノイズに対する H/L 保持力を上げることで化けの
+ * 発生頻度を下げる狙い (2026-08-04 導入の自己修復リフレッシュ
+ * (drivers/display/ls0xx_swvcom.c, CONFIG_LS0XX_SWVCOM_HEAL_REFRESH_MS) と合わせ、
+ * 「起きにくくする」+「起きても直す」の二段構え)
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/gpio/nordic-nrf-gpio.h>
+
+&pinctrl {
+    // 表示専用の SPI ピン設定。液晶は書き込みのみなので MISO は割り当てない
+    display_spi1_default: display_spi1_default {
+        group1 {
+            psels = <NRF_PSEL(SPIM_SCK, 0, 17)>,   // FFC 2: SCLK
+                <NRF_PSEL(SPIM_MOSI, 0, 21)>;      // FFC 3: SDIO → 液晶 SI
+            // 高駆動 (NRF_DRIVE_H0H1, dts/bindings/pinctrl/nordic,nrf-pinctrl.yaml
+            // の nordic,drive-mode プロパティ)。2026-08-05 対応、ファイル冒頭
+            // コメント参照
+            nordic,drive-mode = <NRF_DRIVE_H0H1>;
+        };
+    };
+
+    display_spi1_sleep: display_spi1_sleep {
+        group1 {
+            psels = <NRF_PSEL(SPIM_SCK, 0, 17)>,
+                <NRF_PSEL(SPIM_MOSI, 0, 21)>;
+            low-power-enable;
+        };
+    };
+};
+
+// FFC の VCC (ピン6) は P0.24 の GPIO 出力から給電される (Extender Mini の設計。
+// トラックボール/トラックパッドモジュールの power-gpios と同じ)。ドライブ強度も
+// モジュール例と同じ H1。
+//
+// 2026-08-02: gpio-hog (常時 ON 固定) から zmk,ext-power-generic に変更
+// (codex P1 指摘対応)。non-lipo バッテリー管理が select する ZMK_SLEEP により
+// 無操作 CONFIG_ZMK_IDLE_SLEEP_TIMEOUT (既定150分) 後にディープスリープ
+// (nRF52840 System OFF) へ入る経路が常用ファームで開通したが、System OFF 中も
+// nRF52840 は GPIO の PIN_CNF を保持するため、gpio-hog のままだと SW VCOM 反転
+// (drivers/display/ls0xx_swvcom.c の k_work) だけが止まり液晶には通電され続け、Sharp MIP で
+// 禁忌の DC バイアス印加状態になる。ext-power-generic は ZMK の
+// zmk_pm_suspend_devices() (app/src/pm.c) から PM_DEVICE_ACTION_SUSPEND で
+// 呼ばれ、sys_poweroff() (System OFF 突入) 前に確実に P0.24 を Low にする。
+// 起床はフルリセットなので ext-power・ls0xx とも自然に再初期化される。
+// ノード名は "EXT_POWER" 固定 (label プロパティではなくノード名自体が
+// device_get_binding("EXT_POWER") の解決対象。app/src/behaviors/behavior_ext_power.c
+// 参照。joric/nrfmicro 等 upstream ボードと同じ命名規約)。
+// init 優先度は ext_power=81 (ZMK_EXT_POWER_INIT_PRIORITY) < ls0xx=85
+// (CONFIG_DISPLAY_INIT_PRIORITY 既定) で、電源 ON が表示ドライバ初期化より
+// 確実に先行する。
+// init-delay-ms = 5: 2026-08-14 追加 (tecla-cero キーボードリポジトリの
+// DESIGN.md に書いてあった逃げ道の適用)。
+// 81 と 85 は連続実行されるため、P0.24 High から ls0xx init の初期化書き込み
+// (CONFIG_LS0XX_SWVCOM_INIT_FILL_BLACK 有効時 (例: tecla-cero では
+// TECLA_DISPLAY_BOOT_ANIM が select) は黒転ブリッジの全行黒送信、無効時は CLEAR)
+// までは µs オーダーしかなく、パネル VDD の立ち上がり安定前に SPI が届いて
+// 書き込みが失われる (=黒転が空振りして白のまま LVGL 開始まで残る) 恐れが
+// ある。ext_power_generic_init() は enable 後に init_delay_ms だけ k_msleep
+// してから後続 (表示ドライバ) の init へ進むので、ここで 5ms 待たせて
+// パネル安定後に初期化書き込みが届くことを保証する (起動時間への影響 5ms は
+// ブートローダ ~1 秒に対して誤差)
+/ {
+    EXT_POWER {
+        compatible = "zmk,ext-power-generic";
+        control-gpios = <&gpio0 24 (GPIO_ACTIVE_HIGH | NRF_GPIO_DRIVE_H1)>;
+        init-delay-ms = <5>;
+    };
+};
+
+&spi1 {
+    status = "okay";
+    compatible = "nordic,nrf-spim";
+    pinctrl-0 = <&display_spi1_default>;
+    pinctrl-1 = <&display_spi1_sleep>;
+    pinctrl-names = "default", "sleep";
+    // Sharp MIP の SCS はアクティブ High。高駆動 (2026-08-05 対応、ファイル
+    // 冒頭コメント参照)
+    cs-gpios = <&gpio0 31 (GPIO_ACTIVE_HIGH | NRF_GPIO_DRIVE_H0H1)>;
+
+    ls0xx: ls0xx@0 {
+        compatible = "sharp,ls0xx-swvcom";
+        reg = <0>;
+        spi-max-frequency = <1000000>;
+        width = <160>;
+        height = <68>;
+        // EXTCOMIN は beekeeb 5P に出ていないため、ソフトウェア VCOM 反転版
+        // ドライバ (drivers/display/ls0xx_swvcom.c) を使用。LS011B7DH03 の仕様 (COM 約30Hz)
+        // に合わせ半周期 17ms で V ビットをトグルする
+        vcom-period-ms = <34>;
+    };
+};
+
+/ {
+    chosen {
+        zephyr,display = &ls0xx;
+    };
+};

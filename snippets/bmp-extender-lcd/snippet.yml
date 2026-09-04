@@ -1,0 +1,4 @@
+name: bmp-extender-lcd
+append:
+  EXTRA_DTC_OVERLAY_FILE: bmp-extender-lcd.overlay
+  EXTRA_CONF_FILE: bmp-extender-lcd.conf

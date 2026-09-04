@@ -1,0 +1,13 @@
+/*
+ * MIP 液晶 縦表示 (portrait, 論理 68x160) 追加差分スニペット。
+ *
+ * bmp-extender-lcd の後に (build.yaml の snippet 記載順で) 適用すること。
+ * bmp-extender-lcd 本体 (bmp-extender-lcd.overlay/.conf) は無変更で、ここでは
+ * ls0xx ノードへ rotation プロパティを足すだけ。
+ *
+ * 90 = 論理内容を時計回りに90°回して表示 (drivers/display/ls0xx_swvcom.c 参照)。
+ * 実機で天地/左右が逆であれば 270 に変更するだけでよい。
+ */
+&ls0xx {
+    rotation = <90>;
+};

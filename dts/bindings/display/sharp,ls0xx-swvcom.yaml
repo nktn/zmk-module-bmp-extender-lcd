@@ -1,0 +1,63 @@
+# Sharp メモリ液晶 (LS0xx 系) — ソフトウェア VCOM 反転版
+# EXTCOMIN が配線されていない構成 (beekeeb ブレイクアウト 5P 等) 向け。
+# シリアルコマンドの V ビットを周期反転して DC バイアスを防ぐ
+
+description: Sharp memory display controller with software VCOM toggling
+
+compatible: "sharp,ls0xx-swvcom"
+
+include: [spi-device.yaml, display-controller.yaml]
+
+properties:
+  vcom-period-ms:
+    type: int
+    default: 34
+    description: |
+      VCOM 極性反転の全周期 [ms]。半周期ごとに V ビットをトグルする。
+      LS011B7DH03 の仕様は COM 周波数 約30Hz (極性切替 約17ms ごと) のため
+      デフォルト 34ms (半周期 17ms ≈ 58.8Hz 切替 = 仕様内)。
+      本ドライバは単一インスタンス前提 (DT_INST 0 のみ)
+
+  disp-en-gpios:
+    type: phandle-array
+    description: |
+      DISPLAY enable ピン (配線されている場合のみ)
+
+  rotation:
+    type: int
+    default: 0
+    enum:
+      - 0
+      - 90
+      - 270
+    description: |
+      パネル物理座標系 (width/height プロパティ、常に 160x68 のまま) に対する
+      論理表示の回転角度 (時計回り, 度)。Zephyr v4.1 の LVGL グルー
+      (modules/lvgl/lvgl.c, lvgl_display_mono.c) に回転サポートが無いため、
+      本ドライバの write()/get_capabilities() 内で独自に回転を実装する
+      (詳細は drivers/display/ls0xx_swvcom.c 冒頭コメントと、tecla-cero
+      キーボードリポジトリ (zmk-keyboard-tecla-cero-adv-private) の
+      snippets/display-mip/DESIGN.md 参照。同ファイルはこのモジュールには
+      同梱していない)。
+
+      0 (既定): 無回転。既存の実機検証済み経路を一切変更しない
+      (ゼロオーバーヘッド)。
+
+      90/270: get_capabilities() が論理解像度 72x160 を advertise する
+      (パネル高さ 68 は 8 の倍数でないため 8 の倍数へ切り上げた 72 を使い、
+      68〜71 列はデッドカラムとして write() 側で読み捨てる。lvgl.c の
+      1bpp パック処理 (x/8 + y*width/8 という整数演算) が width を 8 の倍数
+      と仮定しているため、68 を直接 advertise すると行毎に半バイトずれて
+      破綻する)。write() は受け取った論理座標の MONO01 バッファをビット
+      転置し、パネル空間のシャドウバッファへ書いてから既存の
+      ls0xx_update_display() でパネル全68行を送信する。
+
+      90 = 論理内容を時計回りに90°回して表示、270 =反時計回り
+      (=時計回り270°)。実機で天地/左右が逆であれば 90⇔270 を入れ替える
+      だけでよい。(2026-08-03 codex レビュー P1: 初版はこの説明と実装の式が
+      逆だったため修正。正しい式は drivers/display/ls0xx_swvcom.c の
+      ls0xx_transpose_into_shadow() 冒頭コメント参照)
+
+      180 は現状未実装 (コスト対効果が低いため enum から除外。用途は
+      縦表示 (90/270) であり、180 は単なる天地逆さの横表示にしかならない。
+      詳細は tecla-cero キーボードリポジトリの DESIGN.md)。

@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# zmk-module-bmp-extender-lcd
+
+config LS0XX_SWVCOM
+    bool "Sharp LS0xx memory display driver with software VCOM toggling"
+    default y
+    depends on DT_HAS_SHARP_LS0XX_SWVCOM_ENABLED
+    depends on DISPLAY
+    help
+      Sharp MIP display driver based on Zephyr's ls0xx, adding periodic
+      software VCOM inversion via the serial command V bit for wirings
+      without an EXTCOMIN line.
+
+config LS0XX_SWVCOM_HEAL_REFRESH_MS
+    int "Self-healing periodic full-panel refresh interval (ms) for the rotated MIP driver, 0 to disable"
+    default 2000
+    depends on LS0XX_SWVCOM
+    help
+      Real-hardware feedback (2026-08-05, tecla-cero) showed random
+      speckle/streak corruption accumulating in the panel's own bistable
+      pixel memory while the BLE host was out of range -- suspected
+      external causes are voltage sag on an out-of-spec supply rail
+      during advertising radio current spikes, and/or 2.4GHz EMI coupling
+      into jumper wiring (history: the tecla-cero keyboard repository
+      (zmk-keyboard-tecla-cero-adv-private), snippets/display-mip/DESIGN.md,
+      "パネルメモリ化け" section). The row-level dirty-diff sender in the
+      driver only re-sends rows whose *intended* content changed, so it
+      cannot detect or fix corruption that happens outside its control;
+      before the diff sender existed, frequent full-panel redraws
+      happened to paper over the corruption on every unrelated redraw,
+      which is what read as "flicker". This makes the driver blind-resend
+      its shadow framebuffer (known-good content) to the whole panel on a
+      periodic timer, self-healing any corruption within one interval
+      regardless of whether LVGL thinks anything changed. Firmware cannot
+      fix the underlying electrical cause; this only bounds how long
+      corruption can persist. Only effective when the driver's rotation
+      is enabled (the shadow framebuffer this reads from only exists on
+      that path); the driver guards the whole feature with
+      `#if LS0XX_ROTATION != 0`, so in rotation=0 builds this symbol
+      compiles to nothing regardless of its value. Set to 0 to disable.
+      The extra ~12ms SPI transfer every interval is negligible next to
+      typical values (the display has no continuous animation); the
+      timer's own device is unaffected by ZMK_SLEEP/System OFF since
+      ext-power is cut first.
+
+config LS0XX_SWVCOM_INIT_FILL_BLACK
+    bool "Send an all-black fill instead of CLEAR on driver init"
+    default n
+    depends on LS0XX_SWVCOM
+    help
+      At driver init, send an all-rows black (ink) fill instead of the
+      usual white CLEAR command. Useful when the application's first
+      frame is black (e.g. a boot splash), so the retained
+      previous-session image (Sharp MIP panels keep the last written
+      image on their bistable pixel memory across power cycles) cuts
+      straight to black with no white blink in between. Only effective
+      when the driver's rotation is enabled (the shadow-framebuffer path);
+      writing all rows pins every pixel to a known state exactly like
+      CLEAR would, so this is a drop-in replacement for that
+      initialization step.
