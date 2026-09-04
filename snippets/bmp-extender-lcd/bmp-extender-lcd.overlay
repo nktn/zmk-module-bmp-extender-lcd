@@ -13,9 +13,7 @@
  * トラックボール (spi0, 基板直結側) とは独立なので input-trackball はそのまま使える。
  *
  * 2026-08-05 実機フィードバック: ホスト (iPhone) 不在中にパネルメモリの
- * ビットが化ける不具合が確認された (詳細は tecla-cero キーボードリポジトリ
- * (zmk-keyboard-tecla-cero-adv-private) の snippets/display-mip/DESIGN.md
- * 「パネルメモリ化け」節参照。同ファイルはこのモジュールには同梱していない)。
+ * ビットが化ける不具合が確認された (README.md「制約・注意点」参照)。
  * 原因候補の一つである「試作機のジャンパ配線
  * への 2.4GHz EMI 誘導」への緩和策として、SCLK/MOSI (pinctrl の
  * nordic,drive-mode) と CS (cs-gpios) のドライブ強度を高駆動

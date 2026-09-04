@@ -22,9 +22,8 @@ config LS0XX_SWVCOM_HEAL_REFRESH_MS
       pixel memory while the BLE host was out of range -- suspected
       external causes are voltage sag on an out-of-spec supply rail
       during advertising radio current spikes, and/or 2.4GHz EMI coupling
-      into jumper wiring (history: the tecla-cero keyboard repository
-      (zmk-keyboard-tecla-cero-adv-private), snippets/display-mip/DESIGN.md,
-      "パネルメモリ化け" section). The row-level dirty-diff sender in the
+      into jumper wiring (see README.md, "制約・注意点"). The row-level
+      dirty-diff sender in the
       driver only re-sends rows whose *intended* content changed, so it
       cannot detect or fix corruption that happens outside its control;
       before the diff sender existed, frequent full-panel redraws

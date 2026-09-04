@@ -35,10 +35,7 @@ properties:
       論理表示の回転角度 (時計回り, 度)。Zephyr v4.1 の LVGL グルー
       (modules/lvgl/lvgl.c, lvgl_display_mono.c) に回転サポートが無いため、
       本ドライバの write()/get_capabilities() 内で独自に回転を実装する
-      (詳細は drivers/display/ls0xx_swvcom.c 冒頭コメントと、tecla-cero
-      キーボードリポジトリ (zmk-keyboard-tecla-cero-adv-private) の
-      snippets/display-mip/DESIGN.md 参照。同ファイルはこのモジュールには
-      同梱していない)。
+      (詳細は drivers/display/ls0xx_swvcom.c 冒頭コメントと README.md 参照)。
 
       0 (既定): 無回転。既存の実機検証済み経路を一切変更しない
       (ゼロオーバーヘッド)。

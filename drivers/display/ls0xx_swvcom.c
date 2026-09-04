@@ -20,9 +20,9 @@
  * snippets/bmp-extender-lcd/bmp-extender-lcd.overlay の zmk,ext-power-generic (P0.24) が
  * ZMK の zmk_pm_suspend_devices() 経由 PM_DEVICE_ACTION_SUSPEND でパネル電源自体を
  * 落とすため、VCOM 停止中に液晶へ通電されたままになる DC バイアス問題は生じない
- * (2026-08-02 codex P1 指摘対応。旧実装は P0.24 を gpio-hog で常時 ON 固定していた。
- * 詳細は tecla-cero キーボードリポジトリ (zmk-keyboard-tecla-cero-adv-private) の
- * snippets/display-mip/DESIGN.md 参照。同ファイルはこのモジュールには同梱していない)。
+ * (2026-08-02。旧実装は P0.24 を gpio-hog で常時 ON 固定しており、System OFF 中も
+ * 液晶に通電され続けて DC バイアスがかかる問題があった。snippets/bmp-extender-lcd
+ * の overlay にある EXT_POWER ノードのコメント参照)。
  * 起床はフルリセットなので本ドライバも ext-power も自然に再初期化される。
  *
  * 2026-08-02: Zephyr v4.1.0+zmk-fixes ベースへ移植。upstream の新ベースは
@@ -40,10 +40,7 @@
  * Zephyr v4.1 の LVGL グルー (modules/lvgl/lvgl.c, lvgl_display_mono.c) には
  * 回転サポートが無い (lv_display_set_rotation を呼ばない。flush は
  * display_write へ座標を素通しするだけ) ため、回転は本ドライバの
- * write()/get_capabilities() で独自に実装する。詳細な設計判断・実測値は
- * tecla-cero キーボードリポジトリ (zmk-keyboard-tecla-cero-adv-private) の
- * snippets/display-mip/DESIGN.md「縦表示」節 (このモジュールには同梱していない)
- * を参照。ここでは要点のみ:
+ * write()/get_capabilities() で独自に実装する。要点:
  *   - rotation=0 (既定) の経路は完全に無変更 (下記 #if 群はすべて
  *     LS0XX_ROTATION == 0 のとき事実上消える)
  *   - rotation=90/270 のとき get_capabilities() は論理解像度 72x160 を
@@ -354,10 +351,8 @@ static __unused int ls0xx_clear(const struct device *dev)
  * 「flush がそもそも呼ばれているか / SPI 送信が成功しているか」を
  * 実機ログで判定できるようにする (毎フレームのスパムは避け、初回 +
  * 32回毎 + エラー時は毎回に絞る)。CONFIG_ZMK_USB_LOGGING が無効な
- * 通常ビルドではこのブロックごとコンパイルアウトされ、影響は無い。
- * 詳細は tecla-cero キーボードリポジトリ (zmk-keyboard-tecla-cero-adv-private) の
- * snippets/display-mip/DESIGN.md「usblog ビルドの画面無表示」節参照
- * (このモジュールには同梱していない) */
+ * 通常ビルドではこのブロックごとコンパイルアウトされ、影響は無い
+ * (USB ログ有効ビルドで画面が出ない事象の切り分け用に 2026-08-04 に追加) */
 #define LS0XX_DIAG_LOG_INTERVAL 32
 static uint32_t ls0xx_diag_update_calls;
 #endif
