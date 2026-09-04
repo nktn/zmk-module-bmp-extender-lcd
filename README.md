@@ -34,9 +34,18 @@ BMP Boost (nRF52840) 向け ZMK モジュール。以下の 2 つを提供する
      既定 2000ms、0 で無効化) — パネル自体のビストーブルメモリが
      電圧サグ/EMI 等で自然に化けることがあるため、shadow FB の内容を
      周期的に全行 blind resend して補修する。
-   - **黒フィル初期化** (`CONFIG_LS0XX_SWVCOM_INIT_FILL_BLACK`) — 起動直後の
-     最初のフレームが黒の場合、白 CLEAR を経由せず直接黒を送ることで
-     白フラッシュを避ける。
+   - **黒フィル初期化** (`CONFIG_LS0XX_SWVCOM_INIT_FILL_BLACK`、既定 n) —
+     y にすると、初期化の 1 回目の書き込みが「白 CLEAR」から「全行黒フィル」に
+     置き換わる。起動直後の最初のフレームが黒 (黒始まりの起動アニメ等) なら
+     白フラッシュを経由せず黒がつながる。
+     - 最初のフレームが白 (ZMK 標準のステータス画面等) なら **既定 n のまま**
+       で良い。従来どおり白 CLEAR で始まる。
+     - y にしても描画は壊れない。行単位の dirty-diff 送信が最初のフレームを
+       全黒の shadow FB と比較して差分行をすべて送るため、最終的な表示内容は
+       同じ。仮定が外れた場合の違いは「白の代わりに黒が一瞬出る」だけ。
+     - ドライバ初期化の時点では LVGL がまだ何も描いていないので自動判定は
+       できない。黒始まりのフレームを持つアプリ側の Kconfig が
+       `select LS0XX_SWVCOM_INIT_FILL_BLACK if LS0XX_SWVCOM` する形を推奨。
 
 2. **スニペット `bmp-extender-lcd` / `bmp-extender-lcd-vertical`**
    BMP Boost Extender Mini の FFC ポートから Sharp LS011B7DH03 (160x68) を
@@ -122,7 +131,7 @@ Zephyr のモジュール snippet 解決は `zephyr/module.yml` の `snippet_roo
 |---|---|---|
 | `CONFIG_LS0XX_SWVCOM` | y (`DT_HAS_SHARP_LS0XX_SWVCOM_ENABLED` かつ `DISPLAY` 依存) | ドライバ本体の有効化 |
 | `CONFIG_LS0XX_SWVCOM_HEAL_REFRESH_MS` | 2000 | 自己修復用の周期フル送信間隔 (ms)。0 で無効化。回転有効時のみ効果あり |
-| `CONFIG_LS0XX_SWVCOM_INIT_FILL_BLACK` | n | 初期化時に CLEAR (白) の代わりに全黒フィルを送る。回転有効時のみ効果あり |
+| `CONFIG_LS0XX_SWVCOM_INIT_FILL_BLACK` | n | 初期化時に CLEAR (白) の代わりに全黒フィルを送る。最初のフレームが黒のときだけ y にする (白始まりなら既定のまま。y でも描画は壊れず、違いは起動時に一瞬見える色だけ)。回転有効時のみ効果あり |
 
 `bmp-extender-lcd.conf` が設定する CONFIG (抜粋、コメントより理由付き):
 

@@ -58,3 +58,17 @@ config LS0XX_SWVCOM_INIT_FILL_BLACK
       writing all rows pins every pixel to a known state exactly like
       CLEAR would, so this is a drop-in replacement for that
       initialization step.
+
+      Leave this at n if the application's first frame is white (the
+      stock ZMK status screen, for example): the default CLEAR then goes
+      straight from the retained image to white. Enabling it is never
+      unsafe: the row-level dirty-diff sender compares the first flushed
+      frame against the all-black shadow framebuffer and sends every row
+      that differs, so the panel always ends up showing exactly what was
+      drawn. The only effect of a mismatch is cosmetic (a brief black
+      instead of a brief white before the first frame). The driver
+      cannot decide this by itself because nothing has been drawn yet at
+      init time, which is why it is a build-time choice; the application
+      that owns the black first frame should `select` it (e.g. a boot
+      splash Kconfig doing `select LS0XX_SWVCOM_INIT_FILL_BLACK if
+      LS0XX_SWVCOM`).
